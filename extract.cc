@@ -158,10 +158,10 @@ void extractTrack(double* outArray, const int i, const int nX, const int nY, tra
   int hitX = i%nX;
   int hitY = i/nX;
   const double &Ei = outArray[i];
+  hit.flag = hit.flag|mask[i];
   
   if(Ei>kSat){
     hit.flag = hit.flag|kSatFlag;
-    hit.flag = hit.flag|mask[i];
     hit.nSat += 1;
   }
   hit.nt.Fill(hitX,hitY, Ei,0);
@@ -178,7 +178,7 @@ void extractTrack(double* outArray, const int i, const int nX, const int nY, tra
       extractTrack(outArray, i-1, nX, nY, hit, mask);
     }
   }
-  return;
+  
   //South
   if(hitY>0){
     const double &En = outArray[i-nX];
