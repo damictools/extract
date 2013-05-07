@@ -17,6 +17,7 @@
 #include <climits>
 #include <cmath>
 #include <iomanip>
+#include <sys/resource.h>
 
 #include "globalConstants.h"
 
@@ -144,6 +145,7 @@ struct track_t{
   int nCore;
   int flag;
   int nSat;
+  int id;
   
   int xMin;
   int xMax;
@@ -153,7 +155,7 @@ struct track_t{
   track_t(TNtuple &n) : nt(n), eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0) {};
 };
 
-void extractTrack(double* outArray, const int i, const int nX, const int nY, track_t &hit, const char* mask){
+void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask){
   
   int hitX = i%nX;
   int hitY = i/nX;
@@ -169,7 +171,7 @@ void extractTrack(double* outArray, const int i, const int nX, const int nY, tra
   hit.xPix.push_back(hitX);
   hit.yPix.push_back(hitY);
   
-  outArray[i] = kExtractedMask;
+  outArray[i] = kExtractedMask-hit.id;
   
   //West
   if(hitX>0){
@@ -194,7 +196,7 @@ void extractTrack(double* outArray, const int i, const int nX, const int nY, tra
       extractTrack(outArray, i+1, nX, nY, hit, mask);
     }
   }
-
+  
   //North
   if(hitY<nY-1){
     const double &En = outArray[i+nX];
@@ -208,6 +210,7 @@ void extractTrack(double* outArray, const int i, const int nX, const int nY, tra
 
 
 void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, const char* mask){
+  
   const int xMin = hit.nt.GetMinimum("x");
   const int xMax = hit.nt.GetMaximum("x");
   const int yMin = hit.nt.GetMinimum("y");
@@ -227,27 +230,43 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   hit.yMin = yMin;
   hit.yMax = yMax;
   hit.nCore = nPix;
-  
-//   cout << hit.nt.GetName() << "\t" << xScanMin << "\t" << xScanMax << "\t" << yScanMin << "\t" << yScanMax << endl;
-  
+
+  const int thisTrackMask = kExtractedMask-hit.id;
   for(int y=yScanMin;y<=yScanMax;++y){
     for(int x=xScanMin;x<=xScanMax;++x){
-      int dMin = kSkirtSize+1;
+      
       const double &En = outArray[x+y*nX];
-      hit.flag = hit.flag|mask[x+y*nX];
-      for(unsigned int i=0;i<nPix;++i){
-	const int dx = abs(x-hit.xPix[i]);
-	if( dx   >kSkirtSize) continue;
-	const int dTot = abs(y-hit.yPix[i]) + dx;
-	if( dTot >kSkirtSize) continue;
-	
-	if(En == kExtractedMask) continue;
-	if(dMin>dTot){
-	  dMin = dTot;  
-	}
+      if(En == thisTrackMask) continue;
+      float dMin = kSkirtSize+1;
+      bool doneSearch = false;
+      
+      for(int dxi=-kSkirtSize;dxi<=kSkirtSize;++dxi){
+        int xi = x+dxi;
+        if(xi<xScanMin || xi>xScanMax) continue;
+        for(int dyi=-kSkirtSize;dyi<=kSkirtSize;++dyi){
+          int yi = y+dyi;
+          if(yi<yScanMin || yi>yScanMax) continue;
+          
+          const double &Ei = outArray[xi+yi*nX];
+          if(Ei!=thisTrackMask) continue;
+          
+          const float dTot = sqrt(dxi*dxi+dyi*dyi);
+          if(dMin>dTot){
+            dMin = dTot;
+            if(dMin==1){
+              doneSearch=true;
+              break;
+            }
+          }
+        }
+        if(doneSearch) break;  
       }
-      if(dMin >kSkirtSize) continue;
-      else hit.nt.Fill(x,y,En,dMin);
+      
+      if(dMin<kSkirtSize+1){
+        hit.flag = hit.flag|mask[x+y*nX];  
+        hit.nt.Fill(x,y,En,dMin);
+      }
+
     }
   }
   
@@ -271,6 +290,7 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
       hitName << "hit_" << hitN;
       TNtuple nt(hitName.str().c_str(),hitName.str().c_str(),"x:y:E:level");
       track_t hit(nt);
+      hit.id = hitN;
       ++hitN;
       
       vector<int> xPix;
@@ -565,6 +585,25 @@ int main(int argc, char *argv[])
 {
   
   checkArch(); //Check the size of the double and float variables.
+  
+  const rlim_t kStackSize = 32 * 1024 * 1024;   // min stack size = 16 MB
+  struct rlimit rl;
+  int result;
+
+  result = getrlimit(RLIMIT_STACK, &rl);
+  if (result == 0)
+  {
+      if (rl.rlim_cur < kStackSize)
+      {
+          rl.rlim_cur = kStackSize;
+          result = setrlimit(RLIMIT_STACK, &rl);
+          if (result != 0)
+          {
+              fprintf(stderr, "setrlimit returned result = %d\n", result);
+          }
+      }
+  }
+  
   
   time_t start,end;
   double dif;
