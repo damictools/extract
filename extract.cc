@@ -80,19 +80,16 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   if(printFullHelp){
     cout << bold;
     cout << endl;
-    cout << "This program computes overscan mean and subtracts it line by line.\n";
-    cout << "It handles all the available HDUs. The HDUs in the output fit file\n";
-    cout << "will be double (64bits) for 64bits images and float (32bis) in all\n";
-    cout << "the other cases.\n";
-    cout << "The card \"TRIMSEC\" must be present in the header to use this program.\n";
+    cout << "This program extracts hits and tracks, computes their relevant parameters\n";
+    cout << "and saves them in a root file.\n";
     cout << normal;
   }
   cout << "==========================================================================\n";
   cout << yellow;
   cout << "\nUsage:\n";
-  cout << "  "   << exeName << " <input file> -o <output filename> \n\n";
+  cout << "  "   << exeName << " <input file> <mask file> -o <output filename> \n\n";
   cout << "\nOptions:\n";
-  cout << "  -v for verbosity\n";
+  cout << "  -q for quiet (no screen output)\n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
@@ -519,7 +516,7 @@ int processCommandLineArgs(const int argc, char *argv[],
   bool outFileFlag = false;
   bool maskFileFlag = false;
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:m:o:s:vVhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:m:o:s:qhH?")) != -1) {
     switch (opt) {
       case 'm':
         if(!maskFileFlag){
@@ -544,9 +541,8 @@ int processCommandLineArgs(const int argc, char *argv[],
       case 's':
         singleHdu.push_back(atoi(optarg));
         break;
-      case 'V':
-      case 'v':
-        gVerbosity = 1;
+      case 'q':
+        gVerbosity = 0;
         break;
       case 'h':
       case 'H':
