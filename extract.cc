@@ -25,6 +25,9 @@
 #include "TFile.h"
 #include "TNtuple.h"
 #include "TObject.h"
+#include "tinyxml2.h"
+#include "gConfig.h"
+
 
 using namespace std;
 
@@ -123,16 +126,6 @@ string bitpix2TypeName(int bitpix){
   return typeName;
 }
 
-
-const double kSigma = 18.1;
-const double kSeedThr = kSigma*4;
-const double kAddThr = kSigma*3;
-const int kSkirtSize = 3;
-const int kExtractedMask = -1000;
-const int kEdgeFlag = 2;
-const int kSatFlag = 4;
-const double kSat  = 5e9;
-
 struct track_t{
   TNtuple &nt;
   vector<int> xPix;
@@ -149,10 +142,15 @@ struct track_t{
   int yMin;
   int yMax;
   
-  track_t(TNtuple &n) : nt(n), eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0) {};
+  double xMean;
+  double yMean;
+  double xRMS;
+  double yRMS;
+  
+  track_t(TNtuple &n) : nt(n), eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0), xMean(0), yMean(0), xRMS(0), yRMS(0) {};
 };
 
-void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask){
+void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
   
   int hitX = i%nX;
   int hitY = i/nX;
@@ -174,7 +172,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitX>0){
     const double &En = outArray[i-1];
     if(En>kAddThr){
-      extractTrack(outArray, i-1, nX, nY, hit, mask);
+      extractTrack(outArray, i-1, nX, nY, hit, mask, kAddThr);
     }
   }
   
@@ -182,7 +180,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitY>0){
     const double &En = outArray[i-nX];
     if(En>kAddThr){
-      extractTrack(outArray, i-nX, nX, nY, hit, mask);
+      extractTrack(outArray, i-nX, nX, nY, hit, mask, kAddThr);
     }
   }
   
@@ -190,7 +188,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitX<nX-1){
     const double &En = outArray[i+1];
     if(En>kAddThr){
-      extractTrack(outArray, i+1, nX, nY, hit, mask);
+      extractTrack(outArray, i+1, nX, nY, hit, mask, kAddThr);
     }
   }
   
@@ -198,7 +196,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitY<nY-1){
     const double &En = outArray[i+nX];
     if(En>kAddThr){
-      extractTrack(outArray, i+nX, nX, nY, hit, mask);
+      extractTrack(outArray, i+nX, nX, nY, hit, mask, kAddThr);
     }
   }
   
@@ -207,6 +205,9 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
 
 
 void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, const char* mask){
+  
+  gConfig &gc = gConfig::getInstance();
+  const int kSkirtSize = gc.getSkirtSize();
   
   const int xMin = hit.nt.GetMinimum("x");
   const int xMax = hit.nt.GetMaximum("x");
@@ -270,16 +271,23 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   return;
 }
 
-int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ext, const int totpix, const int nX, const int nY, char* mask){
+int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ext, const long totpix, const int nX, const int nY, char* mask){
+  
+  gConfig &gc = gConfig::getInstance();
+  const double kSeedThr  = gc.getExtSigma(ext) * gc.getSeedThr();
+  const double kAddThr   = gc.getExtSigma(ext) * gc.getAddThr();
+  const double kCal      = gc.getExtCal(ext);
+  const bool kSaveTracks = gc.getSaveTracks();
+  const char *kTrackCuts = gc.getTracksCuts().c_str();
   
   outF->cd();
   
   unsigned int hitN = hitSumm.GetEntries();
   outF->cd("hits");
   if(gVerbosity){
-    cout << "\nProcessing runID " << runID << " ext " << ext << ":\n";
+    cout << "\nProcessing runID " << runID << " ext " << ext << " -> sigma: " << gc.getExtSigma(ext) << ":\n";
   }
-  for(unsigned int i=0;i<totpix;++i){
+  for(long i=0;i<totpix;++i){
     
     if(outArray[i]>kSeedThr){
       
@@ -293,11 +301,18 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
       vector<int> xPix;
       vector<int> yPix;
       
-      extractTrack(outArray, i, nX, nY, hit, mask);
+      extractTrack(outArray, i, nX, nY, hit, mask, kAddThr);
       addSkirt(outArray, nX, nY, hit, mask);
       
-      //nt.Write();
-      hitSumm.Fill(runID, ext, hit.eCore*5.3363e-4, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax);
+      hitSumm.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax);
+      
+      
+      if(kSaveTracks){
+	TNtuple hitSummAux("hitSummAux","","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax");
+	hitSummAux.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax);
+	if( hitSummAux.GetEntries(kTrackCuts) == 1 )
+	  nt.Write();
+      }
     }
     if(gVerbosity){
       if(i%1000 == 0) showProgress(i,totpix);
@@ -308,6 +323,8 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
   if(gVerbosity){
     showProgress(1,1);
   }
+  
+  return 0;
 }
 
 
@@ -425,10 +442,10 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
     if (status != 0) return(status);
       
     if(nUseHdu==0) nUseHdu=nhdu;
-    for (int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
+    for (unsigned int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
     {
       
-      const unsigned int n = single? singleHdu[eN] : eN+1;
+      const int n = single? singleHdu[eN] : eN+1;
       
       if(n>nhdu){
 	cerr << red << "\nError, requested hdu does not exist!\n\n" << normal;
@@ -480,7 +497,8 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       readCardValue(infptr, "RUNID", runID);
       double ext = n;
       readCardValue(infptr, "OHDU", ext);
-      searchForTracks(&outRootFile, hitSumm, outArray, runID, ext,totpix, naxes[0], naxes[1], masks[n-1]);
+      
+      searchForTracks(&outRootFile, hitSumm, outArray, runID, ext, totpix, naxes[0], naxes[1], masks[n-1]);
       
       /* clean up */
       delete[] outArray;
@@ -577,25 +595,31 @@ int processCommandLineArgs(const int argc, char *argv[],
   return 0;
 }
 
+
 int main(int argc, char *argv[])
 {
   
   checkArch(); //Check the size of the double and float variables.
   
-  const rlim_t kStackSize = 32 * 1024 * 1024;   // min stack size = 16 MB
+
+  /* Create configuration singleton and read configuration file */
+  gConfig &gc = gConfig::getInstance();
+  gc.readConfFile("extractConfig.xml");
+  gc.printVariables();
+
+  
+  /* Increase the stack size to be able to use a deeply
+   * nested recursive function */
+  const rlim_t kStackSize = gc.getStackSize() * 1024 * 1024;   // min stack size = gc.getStackSize() MB
   struct rlimit rl;
   int result;
-
   result = getrlimit(RLIMIT_STACK, &rl);
-  if (result == 0)
-  {
-      if (rl.rlim_cur < kStackSize)
-      {
+  if (result == 0){
+      if (rl.rlim_cur < kStackSize){
           rl.rlim_cur = kStackSize;
           result = setrlimit(RLIMIT_STACK, &rl);
-          if (result != 0)
-          {
-              fprintf(stderr, "setrlimit returned result = %d\n", result);
+          if (result != 0){
+	    cerr << "Error increasing the stack size: setrlimit returned result = " << result << endl;
           }
       }
   }
