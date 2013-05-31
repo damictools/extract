@@ -626,8 +626,13 @@ int main(int argc, char *argv[])
 
   /* Create configuration singleton and read configuration file */
   gConfig &gc = gConfig::getInstance();
-  gc.readConfFile(confFile.c_str());
-  gc.printVariables();
+  if(gc.readConfFile(confFile.c_str()) != 0){
+    return 1;
+  }
+  if(gVerbosity){
+    cout << "\nConfig file: " << confFile << endl;
+    gc.printVariables();
+  }
 
   
   /* Increase the stack size to be able to use a deeply
