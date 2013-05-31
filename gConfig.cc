@@ -148,5 +148,5 @@ bool gConfig::readConfFile(const char* confFileName = "extractConfig.xml"){
   if( doc.FirstChildElement("systemConfig")->QueryIntAttribute("stackSize", &stackSize) )
     stackSize = kDefaultStackSize;
   
-  return 0;
+  return true;
 }

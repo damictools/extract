@@ -209,10 +209,10 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   gConfig &gc = gConfig::getInstance();
   const int kSkirtSize = gc.getSkirtSize();
   
-  const int xMin = hit.nt.GetMinimum("x");
-  const int xMax = hit.nt.GetMaximum("x");
-  const int yMin = hit.nt.GetMinimum("y");
-  const int yMax = hit.nt.GetMaximum("y");
+  const int xMin = (int)hit.nt.GetMinimum("x");
+  const int xMax = (int)hit.nt.GetMaximum("x");
+  const int yMin = (int)hit.nt.GetMinimum("y");
+  const int yMax = (int)hit.nt.GetMaximum("y");
   
   const int xScanMin = (xMin-kSkirtSize >  0) ? xMin-kSkirtSize : 0;
   const int xScanMax = (xMax+kSkirtSize < nX) ? xMax+kSkirtSize : nX-1;
@@ -501,7 +501,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double ext = n;
       readCardValue(infptr, "OHDU", ext);
       
-      searchForTracks(&outRootFile, hitSumm, outArray, runID, ext, totpix, naxes[0], naxes[1], masks[n-1]);
+      searchForTracks(&outRootFile, hitSumm, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[n-1]);
       
       /* clean up */
       delete[] outArray;
@@ -626,7 +626,7 @@ int main(int argc, char *argv[])
 
   /* Create configuration singleton and read configuration file */
   gConfig &gc = gConfig::getInstance();
-  if(gc.readConfFile(confFile.c_str()) != 0){
+  if(gc.readConfFile(confFile.c_str()) == false){
     return 1;
   }
   if(gVerbosity){

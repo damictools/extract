@@ -19,7 +19,7 @@ class gConfig
 	
 	float getSeedThr()   {return fSeedThr;};
 	float getAddThr()    {return fAddThr;};
-	float getSkirtSize() {return fSkirtSize;};
+	int   getSkirtSize() {return fSkirtSize;};
 	
 	bool  getSaveTracks(){return fSaveTracks;};
 	std::string getTracksCuts(){return fTracksCuts;};
