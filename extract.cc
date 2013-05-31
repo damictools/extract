@@ -414,21 +414,13 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   int status = 0;
   double nulval = 0.;
   int anynul = 0;
-  int single = 0;
-  
   
   // Read mask
   vector <char*> masks;
-  //const char maskName[]="mask6_sel_R.fits";
   readMask(maskName, masks);
   
   int nhdu = 0;
   const unsigned int nFiles  = inFileList.size();
-  unsigned int nUseHdu = singleHdu.size();
-  
-  if (nUseHdu>0){
-    single = 1; /* Copy only a single HDU if a specific extension was given */
-  }
   
   TFile outRootFile(outFile, "RECREATE");
   outRootFile.mkdir("hits");
@@ -441,16 +433,28 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
     fits_get_num_hdus(infptr, &nhdu, &status);
     if (status != 0) return(status);
       
-    if(nUseHdu==0) nUseHdu=nhdu;
+    /* check the extensions to process*/
+    for(unsigned int i=0;i<singleHdu.size();++i){
+      if(singleHdu[i] > nhdu){
+	fits_close_file(infptr,  &status);
+	cerr << red << "\nError: the file does not have the required HDU!\n\n" << normal;
+	return -1000;
+      }
+    }
+    
+    vector<int> useHdu(singleHdu);
+    if(singleHdu.size() == 0){
+      for(int i=0;i<nhdu;++i){
+	useHdu.push_back(i+1);
+      }
+    }
+    const unsigned int nUseHdu=useHdu.size();
+    
+    
     for (unsigned int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
     {
       
-      const int n = single? singleHdu[eN] : eN+1;
-      
-      if(n>nhdu){
-	cerr << red << "\nError, requested hdu does not exist!\n\n" << normal;
-	continue;
-      }
+      const int n = useHdu[eN];
 
       /* get input image dimensions and total number of pixels in image */
       int hdutype, bitpix, naxis = 0;
@@ -469,7 +473,6 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       /* Don't try to process data if the hdu is empty */    
 //       cout << (hdutype != IMAGE_HDU) << (naxis == 0) << (totpix == 0) << endl;
       if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
-	if(single) break;
 	continue;
       }
       
@@ -526,7 +529,7 @@ void checkArch(){
 }
 
 int processCommandLineArgs(const int argc, char *argv[], 
-                           vector<int> &singleHdu, vector<string> &inFileList, string &maskFile, string &outFile){
+                           vector<int> &singleHdu, vector<string> &inFileList, string &maskFile, string &outFile, string &confFile){
   
   if(argc == 1) return 1;
   inFileList.clear();
@@ -534,7 +537,7 @@ int processCommandLineArgs(const int argc, char *argv[],
   bool outFileFlag = false;
   bool maskFileFlag = false;
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:m:o:s:qhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "i:m:o:s:c:qhH?")) != -1) {
     switch (opt) {
       case 'm':
         if(!maskFileFlag){
@@ -558,6 +561,9 @@ int processCommandLineArgs(const int argc, char *argv[],
         break;
       case 's':
         singleHdu.push_back(atoi(optarg));
+        break;
+      case 'c':
+        confFile = optarg;
         break;
       case 'q':
         gVerbosity = 0;
@@ -601,10 +607,26 @@ int main(int argc, char *argv[])
   
   checkArch(); //Check the size of the double and float variables.
   
+  time_t start,end;
+  double dif;
+  time (&start);
+  
+  string maskFile;
+  string outFile;
+  string confFile = "extractConfig.xml";
+  vector<string> inFileList;
+  vector<int> singleHdu;
+
+  int returnCode = processCommandLineArgs( argc, argv, singleHdu, inFileList, maskFile, outFile, confFile);
+  if(returnCode!=0){
+    if(returnCode == 1) printCopyHelp(argv[0],true);
+    if(returnCode == 2) printCopyHelp(argv[0]);
+    return returnCode;
+  }
 
   /* Create configuration singleton and read configuration file */
   gConfig &gc = gConfig::getInstance();
-  gc.readConfFile("extractConfig.xml");
+  gc.readConfFile(confFile.c_str());
   gc.printVariables();
 
   
@@ -625,21 +647,6 @@ int main(int argc, char *argv[])
   }
   
   
-  time_t start,end;
-  double dif;
-  time (&start);
-  
-  string maskFile;
-  string outFile;
-  vector<string> inFileList;
-  vector<int> singleHdu;
-
-  int returnCode = processCommandLineArgs( argc, argv, singleHdu, inFileList, maskFile, outFile);
-  if(returnCode!=0){
-    if(returnCode == 1) printCopyHelp(argv[0],true);
-    if(returnCode == 2) printCopyHelp(argv[0]);
-    return returnCode;
-  }
   
   if(gVerbosity){
     cout << bold << "\nWill read the following files:\n" << normal;

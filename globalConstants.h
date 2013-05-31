@@ -1,41 +1,39 @@
 #ifndef _globalConstants_h_
 #define _globalConstants_h_
 
-#include <math.h> 
-#include <map>
 
-int gVerbosity = true;
+extern int gVerbosity;
 
 inline double sq(double x){return x*x;};
 
-const int    kMaxLine = 10000;
+extern const int kMaxLine;
 
-const int kExtractedMask = -1000;
-const int kEdgeFlag = 2;
-const int kSatFlag = 4;
-const double kSat  = 5e9;
+extern const int kExtractedMask;
+extern const int kEdgeFlag;
+extern const int kSatFlag;
+extern const double kSat;
 
-const double kPrescan = 6;
-const float kSatValue = 1e10;
-const float kSatMargin = 0.9;
+extern const double kPrescan;
+extern const float kSatValue;
+extern const float kSatMargin;
 
 //colors
-const char cyan[] = { 0x1b, '[', '1', ';', '3', '6', 'm', 0 };
-const char magenta[] = { 0x1b, '[', '1', ';', '3', '5', 'm', 0 };
-const char red[] = { 0x1b, '[', '1', ';', '3', '1', 'm', 0 };
-const char green[] = { 0x1b, '[', '1', ';', '3', '2', 'm', 0 };
-const char yellow[] = { 0x1b, '[', '1', ';', '3', '3', 'm', 0 };
-const char blue[] = "\x1b[1;34m";
+extern const char cyan[];
+extern const char magenta[];
+extern const char red[];
+extern const char green[];
+extern const char yellow[];
+extern const char blue[];
 
-const char bold[] = "\x1b[1;39m";
+extern const char bold[];
 
-const char whiteOnRed[]    = "\x1b[1;41m";
-const char whiteOnGreen[]  = "\x1b[1;42m";
-const char whiteOnPurple[] = "\x1b[1;45m";
-const char whiteOnViolet[] = "\x1b[1;44m";
-const char whiteOnBrown[]  = "\x1b[1;43m";
-const char whiteOnGray[]   = "\x1b[1;47m";
+extern const char whiteOnRed[];
+extern const char whiteOnGreen[];
+extern const char whiteOnPurple[];
+extern const char whiteOnViolet[];
+extern const char whiteOnBrown[];
+extern const char whiteOnGray[];
 
-const char normal[] = { 0x1b, '[', '0', ';', '3', '9', 'm', 0 };
+extern const char normal[];
 
 #endif

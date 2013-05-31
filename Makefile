@@ -5,7 +5,7 @@ CFLAGS = -Wall -I$(CFITSIO) $(shell root-config --cflags)
 LIBS = -L$(CFITSIO) -lcfitsio -lm $(shell root-config --libs)  
 GLIBS = 
 GLIBS += 
-OBJECTS = extract.o tinyxml2.o gConfig.o
+OBJECTS = extract.o tinyxml2.o gConfig.o globalConstants.o 
 HEADERS = globalConstants.h tinyxml2.h gConfig.h
 
 ALL : extract.exe
@@ -23,5 +23,8 @@ gConfig.o : gConfig.cc $(HEADERS)
 tinyxml2.o : tinyxml2.cpp $(HEADERS)
 	$(CPP) -c tinyxml2.cpp -o tinyxml2.o $(CFLAGS)
 
+globalConstants.o : globalConstants.cc $(HEADERS)
+	$(CPP) -c globalConstants.cc -o globalConstants.o $(CFLAGS)
+	
 clean:
 	rm -f *~ *.o *.exe

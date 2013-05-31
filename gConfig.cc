@@ -1,5 +1,6 @@
 #include "tinyxml2.h"
 #include "gConfig.h"
+#include "globalConstants.h"
 #include <iostream>
 #include <sstream>
 
@@ -54,9 +55,13 @@ void gConfig::printVariables(){
   cout << "====================================\n";
 }
   
-bool gConfig::readConfFile(const char* confFileName){
+bool gConfig::readConfFile(const char* confFileName = "extractConfig.xml"){
+  
   tinyxml2::XMLDocument doc;
-  doc.LoadFile( confFileName );
+  if(doc.LoadFile( confFileName ) != 0){
+    cerr << red << "\nCan't read config file! Will not continue.\n\n" << normal;
+    return false;
+  }
 //   doc.Print();
   
   /* Sigmas */
