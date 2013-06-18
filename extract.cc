@@ -127,9 +127,11 @@ string bitpix2TypeName(int bitpix){
 }
 
 struct track_t{
-  TNtuple &nt;
-  vector<int> xPix;
-  vector<int> yPix;
+//   TNtuple &nt;
+  vector<int>    xPix;
+  vector<int>    yPix;
+  vector<double> adc;
+  vector<int>    level;
   
   double eCore;
   int nCore;
@@ -142,12 +144,8 @@ struct track_t{
   int yMin;
   int yMax;
   
-  double xMean;
-  double yMean;
-  double xRMS;
-  double yRMS;
-  
-  track_t(TNtuple &n) : nt(n), eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0), xMean(0), yMean(0), xRMS(0), yRMS(0) {};
+  track_t() : eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0) {};
+  void fill(const int &x , const int &y, const double &adcVal, const int &l){xPix.push_back(x); yPix.push_back(y); adc.push_back(adcVal); level.push_back(l);};
 };
 
 void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
@@ -161,10 +159,9 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
     hit.flag = hit.flag|kSatFlag;
     hit.nSat += 1;
   }
-  hit.nt.Fill(hitX,hitY, Ei,0);
+  
   hit.eCore += Ei;
-  hit.xPix.push_back(hitX);
-  hit.yPix.push_back(hitY);
+  hit.fill(hitX, hitY, Ei, 0);
   
   outArray[i] = kExtractedMask-hit.id;
   
@@ -209,10 +206,10 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   gConfig &gc = gConfig::getInstance();
   const int kSkirtSize = gc.getSkirtSize();
   
-  const int xMin = (int)hit.nt.GetMinimum("x");
-  const int xMax = (int)hit.nt.GetMaximum("x");
-  const int yMin = (int)hit.nt.GetMinimum("y");
-  const int yMax = (int)hit.nt.GetMaximum("y");
+  const int xMin = *( min_element(hit.xPix.begin(),hit.xPix.end()) );
+  const int xMax = *( max_element(hit.xPix.begin(),hit.xPix.end()) );
+  const int yMin = *( min_element(hit.yPix.begin(),hit.yPix.end()) );
+  const int yMax = *( max_element(hit.yPix.begin(),hit.yPix.end()) );
   
   const int xScanMin = (xMin-kSkirtSize >  0) ? xMin-kSkirtSize : 0;
   const int xScanMax = (xMax+kSkirtSize < nX) ? xMax+kSkirtSize : nX-1;
@@ -261,8 +258,8 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
       }
       
       if(dMin<kSkirtSize+1){
-        hit.flag = hit.flag|mask[x+y*nX];  
-        hit.nt.Fill(x,y,En,dMin);
+        hit.flag = hit.flag|mask[x+y*nX];
+        hit.fill(x,y,En,(int)dMin);
       }
 
     }
@@ -270,6 +267,52 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   
   return;
 }
+
+void computeHitParameters(const track_t &hit, vector<Float_t> &hitParam){
+  
+  double xSum   = 0;
+  double ySum   = 0;
+  double adcSum = 0;
+  for(unsigned int i=0;i<hit.xPix.size();++i){
+    if(hit.level[i]==0){
+      xSum   += hit.xPix[i]*hit.adc[i];
+      ySum   += hit.yPix[i]*hit.adc[i];
+      adcSum += hit.adc[i];
+    }
+  }
+  float xBary = xSum/adcSum;
+  float yBary = ySum/adcSum;
+  
+  double x2Sum = 0;
+  double y2Sum = 0;
+  for(unsigned int i=0;i<hit.xPix.size();++i){
+    if(hit.level[i]==0){
+      double dx = (hit.xPix[i] - xBary);
+      double dy = (hit.yPix[i] - yBary);
+      x2Sum   += dx*dx*hit.adc[i];
+      y2Sum   += dy*dy*hit.adc[i];
+    }
+  }
+  float xRMS = x2Sum/adcSum;
+  float yRMS = y2Sum/adcSum;
+  
+  hitParam.push_back(xBary);
+  hitParam.push_back(yBary);
+  hitParam.push_back(xRMS);
+  hitParam.push_back(yRMS);
+}
+
+void writeHit(const int &hitN, const track_t &hit, const double &kCal){
+  ostringstream hitName;
+  hitName << "hit_" << hitN;
+  TNtuple nt(hitName.str().c_str(),hitName.str().c_str(),"x:y:E:level");
+  
+  for(unsigned int i=0;i<hit.xPix.size();++i)
+    nt.Fill(hit.xPix[i], hit.yPix[i], hit.adc[i]*kCal, hit.level[i]);
+  
+  nt.Write();
+}
+
 
 int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ext, const long totpix, const int nX, const int nY, char* mask){
   
@@ -291,10 +334,7 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
     
     if(outArray[i]>kSeedThr){
       
-      ostringstream hitName;
-      hitName << "hit_" << hitN;
-      TNtuple nt(hitName.str().c_str(),hitName.str().c_str(),"x:y:E:level");
-      track_t hit(nt);
+      track_t hit;
       hit.id = hitN;
       ++hitN;
       
@@ -304,14 +344,17 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
       extractTrack(outArray, i, nX, nY, hit, mask, kAddThr);
       addSkirt(outArray, nX, nY, hit, mask);
       
-      hitSumm.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax);
-      
+      vector<Float_t> hitParam;
+      computeHitParameters(hit, hitParam);
+      hitSumm.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax,
+                   hitParam[0], hitParam[1], hitParam[2], hitParam[3]);
       
       if(kSaveTracks){
-	TNtuple hitSummAux("hitSummAux","","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax");
-	hitSummAux.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax);
+	TNtuple hitSummAux("hitSummAux","","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax:xBary:yBary:xRMS:yRMS");
+	const Float_t hitData[] = {runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax};
+	hitSummAux.Fill(hitData);
 	if( hitSummAux.GetEntries(kTrackCuts) == 1 )
-	  nt.Write();
+	  writeHit(hitN, hit, kCal);
       }
     }
     if(gVerbosity){
@@ -424,7 +467,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   
   TFile outRootFile(outFile, "RECREATE");
   outRootFile.mkdir("hits");
-  TNtuple hitSumm("hitSumm","hitSumm","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax");
+  TNtuple hitSumm("hitSumm","hitSumm","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax:xBary:yBary:xRMS:yRMS");
   for(unsigned int fn=0; fn < nFiles; ++fn){
     
     fitsfile  *infptr; /* FITS file pointers defined in fitsio.h */
