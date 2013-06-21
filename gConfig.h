@@ -23,6 +23,7 @@ class gConfig
 	
 	bool  getSaveTracks(){return fSaveTracks;};
 	std::string getTracksCuts(){return fTracksCuts;};
+	std::string getNTupleVars(){return fNTupleVars;};
 	
         void printVariables();
         
@@ -43,6 +44,7 @@ class gConfig
         
         bool fSaveTracks;
         std::string fTracksCuts;
+	std::string fNTupleVars;
         
         // Dont forget to declare these two. You want to make sure they
         // are unaccessable otherwise you may accidently get copies of

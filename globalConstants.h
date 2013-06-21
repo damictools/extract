@@ -3,6 +3,10 @@
 
 
 extern int gVerbosity;
+extern const char  gBaseTNtupleVars[];
+extern const int   gNBaseTNtupleVars;
+extern const char *gExtraTNtupleVars[];
+extern const int   gNExtraTNtupleVars;
 
 inline double sq(double x){return x*x;};
 
@@ -11,6 +15,7 @@ extern const int kMaxLine;
 extern const int kExtractedMask;
 extern const int kEdgeFlag;
 extern const int kSatFlag;
+extern const int kMerFlag;
 extern const double kSat;
 
 extern const double kPrescan;

@@ -148,5 +148,15 @@ bool gConfig::readConfFile(const char* confFileName = "extractConfig.xml"){
   if( doc.FirstChildElement("systemConfig")->QueryIntAttribute("stackSize", &stackSize) )
     stackSize = kDefaultStackSize;
   
+  /* Variables that will be saved in the NTuple */
+  fNTupleVars = gBaseTNtupleVars;
+  for(int l=0;l<=fSkirtSize;++l){
+    ostringstream newVars;
+    for(int n=0;n<gNExtraTNtupleVars;++n){
+      newVars << ":" << gExtraTNtupleVars[n] << l;
+    }
+    fNTupleVars += newVars.str();
+  }
+  
   return true;
 }

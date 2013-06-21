@@ -260,7 +260,13 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
       
       if(dMin<kSkirtSize+1){
         hit.flag = hit.flag|mask[x+y*nX];
-        hit.fill(x,y,En,(int)dMin);
+	if(En<kExtractedMask){
+	  hit.flag = hit.flag|kMerFlag;
+	}
+	if(En>kSat){
+	  hit.flag = hit.flag|kSatFlag;
+	}
+	hit.fill(x,y,En,(int)dMin);
       }
 
     }
@@ -269,38 +275,50 @@ void addSkirt(const double* outArray, const int nX, const int nY, track_t &hit, 
   return;
 }
 
-void computeHitParameters(const track_t &hit, vector<Float_t> &hitParam){
+void computeHitParameters(const track_t &hit, const int &l, const double &kCal, Float_t *hitParam){
   
   double xSum   = 0;
   double ySum   = 0;
+  double wSum   = 0;
   double adcSum = 0;
+  int    nPix   = 0;
   for(unsigned int i=0;i<hit.xPix.size();++i){
-    if(hit.level[i]==0){
-      xSum   += hit.xPix[i]*hit.adc[i];
-      ySum   += hit.yPix[i]*hit.adc[i];
-      adcSum += hit.adc[i];
+    const double &adc = hit.adc[i]; 
+    if(hit.level[i]<=l && adc>kExtractedMask){
+      if(hit.adc[i]>0){
+	xSum += hit.xPix[i]*adc;
+	ySum += hit.yPix[i]*adc;
+	wSum += adc;
+      }
+      adcSum += adc;
+      ++nPix;
     }
   }
-  float xBary = xSum/adcSum;
-  float yBary = ySum/adcSum;
+  float xBary = xSum/wSum;
+  float yBary = ySum/wSum;
   
   double x2Sum = 0;
   double y2Sum = 0;
   for(unsigned int i=0;i<hit.xPix.size();++i){
-    if(hit.level[i]==0){
-      double dx = (hit.xPix[i] - xBary);
-      double dy = (hit.yPix[i] - yBary);
-      x2Sum   += dx*dx*hit.adc[i];
-      y2Sum   += dy*dy*hit.adc[i];
+    const double &adc = hit.adc[i];
+    if(hit.level[i]<=l && adc>kExtractedMask){
+      if(hit.adc[i]>0){
+	double dx = (hit.xPix[i] - xBary);
+	double dy = (hit.yPix[i] - yBary);
+	x2Sum   += dx*dx*adc;
+	y2Sum   += dy*dy*adc;
+      }
     }
   }
-  float xRMS = x2Sum/adcSum;
-  float yRMS = y2Sum/adcSum;
+  float xVar = x2Sum/wSum;
+  float yVar = y2Sum/wSum;
   
-  hitParam.push_back(xBary);
-  hitParam.push_back(yBary);
-  hitParam.push_back(xRMS);
-  hitParam.push_back(yRMS);
+  hitParam[0] = adcSum*kCal;
+  hitParam[1] = nPix;
+  hitParam[2] = xBary;
+  hitParam[3] = yBary;
+  hitParam[4] = xVar;
+  hitParam[5] = yVar;
 }
 
 void writeHit(const int &hitN, const track_t &hit, const double &kCal){
@@ -315,21 +333,26 @@ void writeHit(const int &hitN, const track_t &hit, const double &kCal){
 }
 
 
-int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ext, const long totpix, const int nX, const int nY, char* mask){
+int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ohdu, const long totpix, const int nX, const int nY, char* mask){
   
   gConfig &gc = gConfig::getInstance();
-  const double kSeedThr  = gc.getExtSigma(ext) * gc.getSeedThr();
-  const double kAddThr   = gc.getExtSigma(ext) * gc.getAddThr();
-  const double kCal      = gc.getExtCal(ext);
-  const bool kSaveTracks = gc.getSaveTracks();
-  const char *kTrackCuts = gc.getTracksCuts().c_str();
+  const double kSeedThr   = gc.getExtSigma(ohdu) * gc.getSeedThr();
+  const double kAddThr    = gc.getExtSigma(ohdu) * gc.getAddThr();
+  const double kCal       = gc.getExtCal(ohdu);
+  const int    kSkirtSize = gc.getSkirtSize();
+  const bool  kSaveTracks = gc.getSaveTracks();
+  const char *kTrackCuts  = gc.getTracksCuts().c_str();
+  const char *kNTupleVars = gc.getNTupleVars().c_str();
+  
+  const int kNVars = gNBaseTNtupleVars + gNExtraTNtupleVars*(kSkirtSize+1);
+  Float_t *ntVars = new Float_t[kNVars];
   
   outF->cd();
   
   unsigned int hitN = hitSumm.GetEntries();
   outF->cd("hits");
   if(gVerbosity){
-    cout << "\nProcessing runID " << runID << " ext " << ext << " -> sigma: " << gc.getExtSigma(ext) << ":\n";
+    cout << "\nProcessing runID " << runID << " ohdu " << ohdu << " -> sigma: " << gc.getExtSigma(ohdu) << ":\n";
   }
   for(long i=0;i<totpix;++i){
     
@@ -345,15 +368,27 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
       extractTrack(outArray, i, nX, nY, hit, mask, kAddThr);
       addSkirt(outArray, nX, nY, hit, mask);
       
-      vector<Float_t> hitParam;
-      computeHitParameters(hit, hitParam);
-      hitSumm.Fill(runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax,
-                   hitParam[0], hitParam[1], hitParam[2], hitParam[3]);
+      ntVars[0] = runID;
+      ntVars[1] = ohdu;
+      ntVars[2] = hit.nSat;
+      ntVars[3] = hit.flag; 
+      ntVars[4] = hit.xMin;
+      ntVars[5] = hit.xMax;
+      ntVars[6] = hit.yMin;
+      ntVars[7] = hit.yMax;
+      
+      for(int l=0;l<=kSkirtSize;++l){
+	computeHitParameters( hit, l, kCal, &(ntVars[gNBaseTNtupleVars + gNExtraTNtupleVars*l]) );
+      }
+      hitSumm.Fill(ntVars);
+      
+//       hitSumm.Fill(runID, ohdu, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax,
+//                    hitParam[0], hitParam[1], hitParam[2], hitParam[3]);
       
       if(kSaveTracks){
-	TNtuple hitSummAux("hitSummAux","","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax:xBary:yBary:xRMS:yRMS");
-	const Float_t hitData[] = {runID, ext, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax};
-	hitSummAux.Fill(hitData);
+	TNtuple hitSummAux("hitSummAux","",kNTupleVars);
+// 	const Float_t hitData[] = {runID, ohdu, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax};
+	hitSummAux.Fill(ntVars);
 	if( hitSummAux.GetEntries(kTrackCuts) == 1 )
 	  writeHit(hitN, hit, kCal);
       }
@@ -362,6 +397,7 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
       if(i%1000 == 0) showProgress(i,totpix);
     }
   }
+  delete[] ntVars;
   outF->cd();
   hitSumm.Write(hitSumm.GetName(),TObject::kOverwrite);
   if(gVerbosity){
@@ -466,9 +502,12 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   int nhdu = 0;
   const unsigned int nFiles  = inFileList.size();
   
+  gConfig &gc = gConfig::getInstance();
+  const char *kNTupleVars = gc.getNTupleVars().c_str();
+  
   TFile outRootFile(outFile, "RECREATE");
   outRootFile.mkdir("hits");
-  TNtuple hitSumm("hitSumm","hitSumm","runID:ext:eCore:nCore:nSat:flag:xMin:xMax:yMin:yMax:xBary:yBary:xRMS:yRMS");
+  TNtuple hitSumm("hitSumm","hitSumm",kNTupleVars);
   for(unsigned int fn=0; fn < nFiles; ++fn){
     
     fitsfile  *infptr; /* FITS file pointers defined in fitsio.h */

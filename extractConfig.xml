@@ -25,7 +25,7 @@
 
 <extra
   saveTracks="1"
-  saveTrackCuts="nCore>100"
+  saveTrackCuts="n0>100"
 /> 
   
 
