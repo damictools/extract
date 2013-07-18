@@ -428,7 +428,7 @@ bool readCardValue(fitsfile  *infptr, const char *keyName, double &value){
 
 }
 
-int readMask(const char* maskName, vector <char*> &masks){
+int readMask(const char* maskName, vector <char*> &masks, const vector<int> &singleHdu){
   int status = 0;
   int nhdu = 0;
   double nulval = 0.;
@@ -440,50 +440,71 @@ int readMask(const char* maskName, vector <char*> &masks){
   if (status != 0) return(status);
   fits_get_num_hdus(infptr, &nhdu, &status);
   if (status != 0) return(status);
+  
+  /* check the extensions to process*/
+  for(unsigned int i=0;i<singleHdu.size();++i){
+    if(singleHdu[i] > nhdu){
+      fits_close_file(infptr,  &status);
+      cerr << red << "\nError: the file does not have the required HDU!\n\n" << normal;
+      return -1000;
+    }
+  }
+  
+  vector<int> useHdu(singleHdu);
+  if(singleHdu.size() == 0){
+    for(int i=0;i<nhdu;++i){
+      useHdu.push_back(i+1);
+    }
+  }
+  const unsigned int nUseHdu=useHdu.size();
+  
+  
     
-  for (int n=1; n<=nhdu; ++n)  /* Main loop through each extension */
+  for (int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
   {
-     /* get input image dimensions and total number of pixels in image */
-      int hdutype, bitpix, naxis = 0;
-      long naxes[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-      fits_movabs_hdu(infptr, n, &hdutype, &status);
-      for (int i = 0; i < 9; ++i) naxes[i] = 1;
-      fits_get_img_param(infptr, 9, &bitpix, &naxis, naxes, &status);
-      long totpix = naxes[0] * naxes[1];
+    const int n = useHdu[eN];
+    
+    /* get input image dimensions and total number of pixels in image */
+    int hdutype, bitpix, naxis = 0;
+    long naxes[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+    fits_movabs_hdu(infptr, n, &hdutype, &status);
+    for (int i = 0; i < 9; ++i) naxes[i] = 1;
+    fits_get_img_param(infptr, 9, &bitpix, &naxis, naxes, &status);
+    long totpix = naxes[0] * naxes[1];
 //       double bzero;
 //       ffgky(infptr, TBYTE, "BZERO", &bzero, NULL, &status);
 //       if (status){
 // 	status = 0;
 // 	bzero = 0.0;
 //       }
-      
-      /* Don't try to process data if the hdu is empty */    
+    
+    /* Don't try to process data if the hdu is empty */    
 //       cout << (hdutype != IMAGE_HDU) << (naxis == 0) << (totpix == 0) << endl;
-      if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
-	continue;
-      }
-      
-      char* maskArray = new char[totpix];
+    if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
+      continue;
+    }
+    
+    char* maskArray = new char[totpix];
 //       for(int i=0;i<totpix;++i) outArray[i] = 0;
-      
-      /* Open the input file */
-      fits_movabs_hdu(infptr, n, &hdutype, &status);
-      if (status != 0) return(status);
-      int xMin=1;
-      int xMax=naxes[0];
-      int yMin=1;
-      int yMax=naxes[1];
-      
-      /* Read the images as doubles, regardless of actual datatype. */
-      long fpixel[2]={xMin,yMin};
-      long lpixel[2]={xMax,yMax};
-      long inc[2]={1,1};
-      fits_read_subset(infptr, TBYTE, fpixel, lpixel, inc, &nulval, maskArray, &anynul, &status);
-      if (status != 0){
-	fits_report_error(stderr, status);
-	return(status);
-      }
-      masks.push_back(maskArray);
+    
+    /* Open the input file */
+    fits_movabs_hdu(infptr, n, &hdutype, &status);
+    if (status != 0) return(status);
+    int xMin=1;
+    int xMax=naxes[0];
+    int yMin=1;
+    int yMax=naxes[1];
+    
+    /* Read the images as doubles, regardless of actual datatype. */
+    long fpixel[2]={xMin,yMin};
+    long lpixel[2]={xMax,yMax};
+    long inc[2]={1,1};
+    fits_read_subset(infptr, TBYTE, fpixel, lpixel, inc, &nulval, maskArray, &anynul, &status);
+    if (status != 0){
+      fits_report_error(stderr, status);
+      return(status);
+    }
+    masks.push_back(maskArray);
   }
   fits_close_file(infptr,  &status);
   return status;
@@ -497,7 +518,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   
   // Read mask
   vector <char*> masks;
-  readMask(maskName, masks);
+  readMask(maskName, masks, singleHdu);
   
   int nhdu = 0;
   const unsigned int nFiles  = inFileList.size();
@@ -584,7 +605,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double ext = n;
       readCardValue(infptr, "OHDU", ext);
       
-      searchForTracks(&outRootFile, hitSumm, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[n-1]);
+      searchForTracks(&outRootFile, hitSumm, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[eN]);
       
       /* clean up */
       delete[] outArray;
