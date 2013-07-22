@@ -149,16 +149,132 @@ struct track_t{
   void fill(const int &x , const int &y, const double &adcVal, const int &l){xPix.push_back(x); yPix.push_back(y); adc.push_back(adcVal); level.push_back(l);};
 };
 
+bool testForBugHit(const double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
+  
+  int hitX = i%nX;
+  int hitY = i/nX;
+  const double &Ei = outArray[i];
+  
+  //West
+  if(hitX>0)
+  {
+    
+    const double En = outArray[i-1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "W" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+
+  //North-West
+  if(hitX>0 && hitY<nY-1 /* && has kBugFlag */)
+  {
+    const double En = outArray[i+nX-1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "NW" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  //North
+  if(hitY<nY-1 /* && has kBugFlag */)
+  {
+    const double En = outArray[i+nX];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "N" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  //North-East
+  if(hitX<nX-1 && hitY<nY-1 /* && has kBugFlag */)
+  {
+    const double En = outArray[i+nX+1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "NE" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  //East
+  if(hitX<nX-1 /* && has kBugFlag */)
+  {
+    const double En = outArray[i+1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "E" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+
+  //South-East
+  if(hitX<nX-1 && hitY>0 /* && has kBugFlag */)
+  {
+    const double En = outArray[i-nX+1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "SE" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  //South
+  if(hitY>0 /* && has kBugFlag */)
+  {
+    const double En = outArray[i-nX];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "S" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  //South-West
+  if(hitY>0 && hitX>0 /* && has kBugFlag */)
+  {
+    const double En = outArray[i-nX-1];
+    if (En<kBugEnergy && En>kExtractedMask)
+    {
+      hit.flag = hit.flag|kBugFlag;
+      //cout << "W" << hitX << "\t" << hitY << "\t" << Ei << "\t" << En << endl;
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
   
   int hitX = i%nX;
   int hitY = i/nX;
   const double &Ei = outArray[i];
   hit.flag = hit.flag|mask[i];
-  
+  if (Ei>kSat){
+    if( (hit.flag & kBugFlag) == 0){
+        testForBugHit(outArray, i, nX, nY, hit, mask, kAddThr);
+    }
+  }
+
   if(Ei>kSat){
     hit.flag = hit.flag|kSatFlag;
     hit.nSat += 1;
+
+    //Check if it is a bugHit
+    if( (hit.flag & kBugFlag) == 0){
+      testForBugHit(outArray, i, nX, nY, hit, mask, kAddThr);
+    }
   }
   
   hit.eCore += Ei;

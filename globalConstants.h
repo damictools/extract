@@ -15,12 +15,14 @@ extern const int kMaxLine;
 extern const int kExtractedMask;
 extern const int kEdgeFlag;
 extern const int kSatFlag;
+extern const int kBugFlag;
 extern const int kMerFlag;
 extern const double kSat;
 
 extern const double kPrescan;
 extern const float kSatValue;
 extern const float kSatMargin;
+extern const float kBugEnergy;
 
 //colors
 extern const char cyan[];

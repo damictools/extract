@@ -11,12 +11,14 @@ const int kMaxLine = 10000;
 const int kExtractedMask = -100000;
 const int kEdgeFlag = 2;
 const int kSatFlag = 4;
-const int kMerFlag = 8;
+const int kBugFlag = 8;
+const int kMerFlag = 16;
 const double kSat  = 5e9;
 
 const double kPrescan = 6;
 const float kSatValue = 1e10;
 const float kSatMargin = 0.9;
+const float kBugEnergy = -50;
 
 //colors
 const char cyan[] = { 0x1b, '[', '1', ';', '3', '6', 'm', 0 };
