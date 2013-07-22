@@ -481,6 +481,7 @@ int readMask(const char* maskName, vector <char*> &masks, const vector<int> &sin
     /* Don't try to process data if the hdu is empty */    
 //       cout << (hdutype != IMAGE_HDU) << (naxis == 0) << (totpix == 0) << endl;
     if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
+      masks.push_back(0);
       continue;
     }
     
