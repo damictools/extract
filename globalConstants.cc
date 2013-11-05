@@ -1,7 +1,7 @@
 #include "globalConstants.h"
 
 int gVerbosity = true;
-const char  gBaseTNtupleVars[]  = "runID:ohdu:nSat:flag:xMin:xMax:yMin:yMax";
+const char *gBaseTNtupleVars[]  = {"runID", "ohdu", "nSat", "flag", "xMin", "xMax", "yMin", "yMax"};
 const int   gNBaseTNtupleVars   = 8;
 const char *gExtraTNtupleVars[] = {"E", "n", "xBary", "yBary", "xVar", "yVar"};
 const int   gNExtraTNtupleVars  = 6;

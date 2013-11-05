@@ -25,10 +25,11 @@
 
 <extra
   saveTracks="1"
-  saveTrackCuts="n0>100"
+  saveTrackCuts="n0>3"
 /> 
   
 
 <systemConfig
-  stackSize="128"
+  stackSize="256"
+  hitMaxSize="5000"
 />

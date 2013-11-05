@@ -3,7 +3,7 @@
 
 
 extern int gVerbosity;
-extern const char  gBaseTNtupleVars[];
+extern const char *gBaseTNtupleVars[];
 extern const int   gNBaseTNtupleVars;
 extern const char *gExtraTNtupleVars[];
 extern const int   gNExtraTNtupleVars;

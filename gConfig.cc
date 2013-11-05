@@ -52,6 +52,10 @@ void gConfig::printVariables(){
   cout << "extra:\n";
   cout << "\tsaveTracks:    " << fSaveTracks << endl;
   cout << "\tsaveTrackCuts: " << fTracksCuts << endl;  
+  
+  cout << "system:\n";
+  cout << "\tstackSize:    " << fStackSize << endl;
+  cout << "\thitMaxSize:   " << fHitMaxSize << endl;
   cout << "====================================\n";
 }
   
@@ -139,17 +143,24 @@ bool gConfig::readConfFile(const char* confFileName = "extractConfig.xml"){
   
   /* System */
   const int kDefaultStackSize = 128;
-  int stackSize = kDefaultStackSize;
   if( doc.FirstChildElement("systemConfig") == 0 ){
     cerr << "Missing \'systemConfig\' in config file.\n\n";
     return 1;
   }
   
-  if( doc.FirstChildElement("systemConfig")->QueryIntAttribute("stackSize", &stackSize) )
-    stackSize = kDefaultStackSize;
+  if( doc.FirstChildElement("systemConfig")->QueryIntAttribute("stackSize", &fStackSize) != 0 ){
+    fStackSize = kDefaultStackSize*8;
+  }
+  
+  if( doc.FirstChildElement("systemConfig")->QueryIntAttribute("hitMaxSize", &fHitMaxSize) != 0){
+    fHitMaxSize = kDefaultStackSize*20;
+  }
   
   /* Variables that will be saved in the NTuple */
-  fNTupleVars = gBaseTNtupleVars;
+  for(int n=0;n<gNBaseTNtupleVars;++n){
+    if(n>0) fNTupleVars += ":";
+    fNTupleVars += gBaseTNtupleVars[n];
+  }
   for(int l=0;l<=fSkirtSize;++l){
     ostringstream newVars;
     for(int n=0;n<gNExtraTNtupleVars;++n){

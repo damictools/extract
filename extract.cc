@@ -129,31 +129,33 @@ string bitpix2TypeName(int bitpix){
 
 struct track_t{
 //   TNtuple &nt;
-  vector<int>    xPix;
-  vector<int>    yPix;
-  vector<double> adc;
-  vector<int>    level;
+  vector<Int_t>    xPix;
+  vector<Int_t>    yPix;
+  vector<Float_t>  adc;
+  vector<Int_t>    level;
   
-  double eCore;
-  int nCore;
-  int flag;
-  int nSat;
-  int id;
+  Float_t eCore;
+  Int_t nCore;
+  Int_t flag;
+  Int_t nSat;
+  Int_t id;
   
-  int xMin;
-  int xMax;
-  int yMin;
-  int yMax;
+  Int_t xMin;
+  Int_t xMax;
+  Int_t yMin;
+  Int_t yMax;
   
   track_t() : eCore(0), nCore(0), flag(0), nSat(0), xMin(0), xMax(0), yMin(0), yMax(0) {};
-  void fill(const int &x , const int &y, const double &adcVal, const int &l){xPix.push_back(x); yPix.push_back(y); adc.push_back(adcVal); level.push_back(l);};
+  void fill(const Int_t &x , const Int_t &y, const Float_t &adcVal, const Int_t &l){ xPix.push_back(x); yPix.push_back(y); adc.push_back(adcVal); level.push_back(l); };
+  
+  void reset(){ xPix.clear(); yPix.clear(); adc.clear(); level.clear(); 
+                eCore=0; nCore=0; flag=0; nSat=0; xMin=0; xMax=0; yMin=0; yMax=0; };
 };
 
 bool testForBugHit(const double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
   
   int hitX = i%nX;
   int hitY = i/nX;
-  const double &Ei = outArray[i];
   
   //West
   if(hitX>0)
@@ -448,8 +450,55 @@ void writeHit(const int &hitN, const track_t &hit, const double &kCal){
   nt.Write();
 }
 
+struct hitTreeEntry_t{
+  track_t hit;
+  Int_t   runID;
+  Int_t   ohdu;
+  Int_t   nSavedPix;
+  
+  Float_t *hitParam;
+  
+  hitTreeEntry_t(const Int_t nPar): runID(-1), ohdu(-1), nSavedPix(0){ hitParam = new Float_t[nPar]; };
+  ~hitTreeEntry_t(){ delete[] hitParam; };
+};
 
-int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int runID, const int ohdu, const long totpix, const int nX, const int nY, char* mask){
+void initHitTree(TTree &hitSumm, hitTreeEntry_t &evt ){
+  hitSumm.Branch("runID",    &(evt.runID),    "runID/I");
+  hitSumm.Branch("ohdu",     &(evt.ohdu),     "ohdu/I");
+  
+  hitSumm.Branch("nSat", &(evt.hit.nSat), "nSat/I");
+  hitSumm.Branch("flag", &(evt.hit.flag), "flag/I");
+  hitSumm.Branch("xMin", &(evt.hit.xMin), "xMin/I");
+  hitSumm.Branch("xMax", &(evt.hit.xMax), "xMax/I");
+  hitSumm.Branch("yMin", &(evt.hit.yMin), "yMin/I");
+  hitSumm.Branch("yMax", &(evt.hit.yMax), "yMax/I");
+  
+  gConfig &gc = gConfig::getInstance();
+  const int kSkirtSize  = gc.getSkirtSize();
+  const int kHitMaxSize = gc.getHitMaxSize();
+  
+  for(int l=0;l<=kSkirtSize;++l){
+    for(int n=0;n<gNExtraTNtupleVars;++n){
+      ostringstream varName;
+      varName << gExtraTNtupleVars[n] << l;
+      hitSumm.Branch(varName.str().c_str(),  &(evt.hitParam[n + gNExtraTNtupleVars*l]),  (varName.str()+"/F").c_str() );
+    }
+  }
+  
+  hitSumm.Branch("nSavedPix", &(evt.nSavedPix), "nSavedPix/I");
+  evt.hit.xPix.reserve(kHitMaxSize+1);
+  hitSumm.Branch("xPix",  &(evt.hit.xPix[0]), "xPix[nSavedPix]/I");
+  evt.hit.yPix.reserve(kHitMaxSize+1);
+  hitSumm.Branch("yPix",  &(evt.hit.yPix[0]), "yPix[nSavedPix]/I");
+  evt.hit.level.reserve(kHitMaxSize+1);
+  hitSumm.Branch("level", &(evt.hit.level[0]), "level[nSavedPix]/I");
+  evt.hit.adc.reserve(kHitMaxSize+1);
+  hitSumm.Branch("ePix", &(evt.hit.adc[0]), "ePix[nSavedPix]/F");
+  
+}
+
+
+int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const long totpix, const int nX, const int nY, char* mask){
   
   gConfig &gc = gConfig::getInstance();
   const double kSeedThr   = gc.getExtSigma(ohdu) * gc.getSeedThr();
@@ -458,7 +507,6 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
   const int    kSkirtSize = gc.getSkirtSize();
   const bool  kSaveTracks = gc.getSaveTracks();
   const char *kTrackCuts  = gc.getTracksCuts().c_str();
-  const char *kNTupleVars = gc.getNTupleVars().c_str();
   
   const int kNVars = gNBaseTNtupleVars + gNExtraTNtupleVars*(kSkirtSize+1);
   Float_t *ntVars = new Float_t[kNVars];
@@ -467,6 +515,18 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
   
   unsigned int hitN = hitSumm.GetEntries();
   outF->cd("hits");
+  
+  evt.runID = runID;
+  evt.ohdu = ohdu;
+  track_t &hit = evt.hit;
+  
+  TTree hitSummAux("hitSummAux","hitSummAux");
+  if(kSaveTracks){
+    initHitTree(hitSummAux, evt);
+    hitSummAux.SetCircular(1);
+  }
+  
+  
   if(gVerbosity){
     cout << "\nProcessing runID " << runID << " ohdu " << ohdu << " -> sigma: " << gc.getExtSigma(ohdu) << ":\n";
   }
@@ -474,40 +534,27 @@ int searchForTracks(TFile *outF, TNtuple &hitSumm, double* outArray, const int r
     
     if(outArray[i]>kSeedThr){
       
-      track_t hit;
+      evt.nSavedPix = 0;
+      hit.reset();
       hit.id = hitN;
       ++hitN;
-      
-      vector<int> xPix;
-      vector<int> yPix;
       
       extractTrack(outArray, i, nX, nY, hit, mask, kAddThr);
       addSkirt(outArray, nX, nY, hit, mask);
       
-      ntVars[0] = runID;
-      ntVars[1] = ohdu;
-      ntVars[2] = hit.nSat;
-      ntVars[3] = hit.flag; 
-      ntVars[4] = hit.xMin;
-      ntVars[5] = hit.xMax;
-      ntVars[6] = hit.yMin;
-      ntVars[7] = hit.yMax;
-      
       for(int l=0;l<=kSkirtSize;++l){
-	computeHitParameters( hit, l, kCal, &(ntVars[gNBaseTNtupleVars + gNExtraTNtupleVars*l]) );
+	computeHitParameters( hit, l, kCal, &(evt.hitParam[gNExtraTNtupleVars*l]) );
       }
-      hitSumm.Fill(ntVars);
-      
-//       hitSumm.Fill(runID, ohdu, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax,
-//                    hitParam[0], hitParam[1], hitParam[2], hitParam[3]);
       
       if(kSaveTracks){
-	TNtuple hitSummAux("hitSummAux","",kNTupleVars);
-// 	const Float_t hitData[] = {runID, ohdu, hit.eCore*kCal, hit.nCore, hit.nSat, hit.flag, hit.xMin, hit.xMax, hit.yMin, hit.yMax};
-	hitSummAux.Fill(ntVars);
-	if( hitSummAux.GetEntries(kTrackCuts) == 1 )
-	  writeHit(hitN, hit, kCal);
+	hitSummAux.Fill();
+	if( hitSummAux.GetEntries(kTrackCuts) == 1 ){
+          evt.nSavedPix = hit.xPix.size();
+	  //writeHit(hitN, hit, kCal);
+        }
       }
+      
+      hitSumm.Fill();
     }
     if(gVerbosity){
       if(i%1000 == 0) showProgress(i,totpix);
@@ -576,7 +623,7 @@ int readMask(const char* maskName, vector <char*> &masks, const vector<int> &sin
   
   
     
-  for (int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
+  for (unsigned int eN=0; eN<nUseHdu; ++eN)  /* Main loop through each extension */
   {
     const int n = useHdu[eN];
     
@@ -627,6 +674,49 @@ int readMask(const char* maskName, vector <char*> &masks, const vector<int> &sin
   return status;
 }
 
+void writeConfigTree(TFile *outF){
+  
+  gConfig &gc = gConfig::getInstance();
+  
+  outF->cd();
+  TTree configTree("config","config");
+  
+  Float_t kSigma[101];
+  for(int i=0;i<=100;++i){
+    kSigma[i] = gc.getExtSigma(i);
+  }
+  configTree.Branch("sigma", &kSigma, "sigma[101]/F");
+  
+  Float_t kCal[101];
+  for(int i=0;i<=100;++i){
+    kCal[i] = gc.getExtCal(i);
+  }
+  configTree.Branch("sigma", &kCal, "cal[101]/F");
+  
+  Float_t kSeedThr = gc.getSeedThr();
+  configTree.Branch("seedThr", &kSeedThr, "seedThr/F");
+  
+  Float_t kAddThr = gc.getAddThr();
+  configTree.Branch("addThr", &kAddThr, "addThr/F");
+  
+  Int_t kSkirtSize  = gc.getSkirtSize();
+  configTree.Branch("skirtSize", &kSkirtSize, "skirtSize/I");
+  
+  Int_t kStackSize  = gc.getStackSize();
+  configTree.Branch("stackSize", &kStackSize, "stackSize/I");
+  
+  Int_t kHitMaxSize  = gc.getHitMaxSize();
+  configTree.Branch("hitMaxSize", &kHitMaxSize, "hitMaxSize/I");
+ 
+  Bool_t kSaveTracks  = gc.getSaveTracks();
+  configTree.Branch("saveTracks", &kSaveTracks, "saveTracks/B");
+  
+  TString kTrackCuts  = gc.getTracksCuts();
+  configTree.Branch("trackCuts", &kTrackCuts);
+
+  configTree.Fill();
+  configTree.Write();
+}
 
 int computeImage(const vector<string> &inFileList,const char *maskName, const char *outFile, const vector<int> &singleHdu){
   int status = 0;
@@ -641,11 +731,20 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   const unsigned int nFiles  = inFileList.size();
   
   gConfig &gc = gConfig::getInstance();
-  const char *kNTupleVars = gc.getNTupleVars().c_str();
+  const int   kSkirtSize  = gc.getSkirtSize();
+  
   
   TFile outRootFile(outFile, "RECREATE");
+  
+  writeConfigTree(&outRootFile);
+  
   outRootFile.mkdir("hits");
-  TNtuple hitSumm("hitSumm","hitSumm",kNTupleVars);
+//   TNtuple hitSumm("hitSumm","hitSumm",kNTupleVars);
+  
+  TTree hitSumm("hitSumm","hitSumm");
+  hitTreeEntry_t evt((kSkirtSize+1)*gNExtraTNtupleVars);
+  initHitTree(hitSumm, evt);
+  
   for(unsigned int fn=0; fn < nFiles; ++fn){
     
     fitsfile  *infptr; /* FITS file pointers defined in fitsio.h */
@@ -722,7 +821,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double ext = n;
       readCardValue(infptr, "OHDU", ext);
       
-      searchForTracks(&outRootFile, hitSumm, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[eN]);
+      searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[eN]);
       
       /* clean up */
       delete[] outArray;

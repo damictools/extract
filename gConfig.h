@@ -12,39 +12,41 @@ class gConfig
         }
         bool readConfFile(const char* confFileName);
         
-	int getStackSize(){return fStackSize;};
+        int getStackSize() {return fStackSize;};
+        int getHitMaxSize(){return fHitMaxSize;};
         
-	float getExtSigma(const int ext);
-	float getExtCal(const int ext);
-	
-	float getSeedThr()   {return fSeedThr;};
-	float getAddThr()    {return fAddThr;};
-	int   getSkirtSize() {return fSkirtSize;};
-	
-	bool  getSaveTracks(){return fSaveTracks;};
-	std::string getTracksCuts(){return fTracksCuts;};
-	std::string getNTupleVars(){return fNTupleVars;};
-	
+        float getExtSigma(const int ext);
+        float getExtCal(const int ext);
+        
+        float getSeedThr()   {return fSeedThr;};
+        float getAddThr()    {return fAddThr;};
+        int   getSkirtSize() {return fSkirtSize;};
+        
+        bool  getSaveTracks(){return fSaveTracks;};
+        std::string getTracksCuts(){return fTracksCuts;};
+        std::string getNTupleVars(){return fNTupleVars;};
+        
         void printVariables();
         
     private:
         gConfig();
         
         int fStackSize;
-	
+        int fHitMaxSize;
+        
         std::map<int, float> fExt2Sigma;
         float fDefaultSigma;
         
-	std::map<int, float> fExt2Cal;
+        std::map<int, float> fExt2Cal;
         float fDefaultCal;
-	
+        
         float fSeedThr;
         float fAddThr;
         int fSkirtSize;
         
         bool fSaveTracks;
         std::string fTracksCuts;
-	std::string fNTupleVars;
+        std::string fNTupleVars;
         
         // Dont forget to declare these two. You want to make sure they
         // are unaccessable otherwise you may accidently get copies of
