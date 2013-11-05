@@ -514,7 +514,6 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
   outF->cd();
   
   unsigned int hitN = hitSumm.GetEntries();
-  outF->cd("hits");
   
   evt.runID = runID;
   evt.ohdu = ohdu;
