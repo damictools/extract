@@ -733,13 +733,9 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   gConfig &gc = gConfig::getInstance();
   const int   kSkirtSize  = gc.getSkirtSize();
   
-  
   TFile outRootFile(outFile, "RECREATE");
   
   writeConfigTree(&outRootFile);
-  
-  outRootFile.mkdir("hits");
-//   TNtuple hitSumm("hitSumm","hitSumm",kNTupleVars);
   
   TTree hitSumm("hitSumm","hitSumm");
   hitTreeEntry_t evt((kSkirtSize+1)*gNExtraTNtupleVars);
