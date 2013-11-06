@@ -2,6 +2,7 @@
 #define _globalConstants_h_
 
 
+extern int gHitMaxSize;
 extern int gVerbosity;
 extern const char *gBaseTNtupleVars[];
 extern const int   gNBaseTNtupleVars;

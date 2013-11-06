@@ -29,7 +29,6 @@
 #include "gConfig.h"
 
 
-
 using namespace std;
 
 int deleteFile(const char *fileName){
@@ -257,7 +256,10 @@ bool testForBugHit(const double* outArray, const int &i, const int &nX, const in
   return false;
 }
 
-void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr){
+void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, track_t &hit, const char* mask, const double &kAddThr, int recLevel = 0){
+  
+  if(recLevel>gHitMaxSize)
+    return;
   
   int hitX = i%nX;
   int hitY = i/nX;
@@ -288,7 +290,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitX>0){
     const double &En = outArray[i-1];
     if(En>kAddThr){
-      extractTrack(outArray, i-1, nX, nY, hit, mask, kAddThr);
+      extractTrack(outArray, i-1, nX, nY, hit, mask, kAddThr, recLevel+1);
     }
   }
   
@@ -296,7 +298,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitY>0){
     const double &En = outArray[i-nX];
     if(En>kAddThr){
-      extractTrack(outArray, i-nX, nX, nY, hit, mask, kAddThr);
+      extractTrack(outArray, i-nX, nX, nY, hit, mask, kAddThr, recLevel+1);
     }
   }
   
@@ -304,7 +306,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitX<nX-1){
     const double &En = outArray[i+1];
     if(En>kAddThr){
-      extractTrack(outArray, i+1, nX, nY, hit, mask, kAddThr);
+      extractTrack(outArray, i+1, nX, nY, hit, mask, kAddThr, recLevel+1);
     }
   }
   
@@ -312,7 +314,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
   if(hitY<nY-1){
     const double &En = outArray[i+nX];
     if(En>kAddThr){
-      extractTrack(outArray, i+nX, nX, nY, hit, mask, kAddThr);
+      extractTrack(outArray, i+nX, nX, nY, hit, mask, kAddThr, recLevel+1);
     }
   }
   
@@ -948,6 +950,7 @@ int main(int argc, char *argv[])
     cout << "\nConfig file: " << confFile << endl;
     gc.printVariables();
   }
+  gHitMaxSize = gc.getHitMaxSize();
 
   
   /* Increase the stack size to be able to use a deeply

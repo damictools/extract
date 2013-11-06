@@ -1,5 +1,6 @@
 #include "globalConstants.h"
 
+int gHitMaxSize = 5000; //default hit max size
 int gVerbosity = true;
 const char *gBaseTNtupleVars[]  = {"runID", "ohdu", "nSat", "flag", "xMin", "xMax", "yMin", "yMax"};
 const int   gNBaseTNtupleVars   = 8;
