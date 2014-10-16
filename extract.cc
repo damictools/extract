@@ -456,17 +456,19 @@ struct hitTreeEntry_t{
   track_t hit;
   Int_t   runID;
   Int_t   ohdu;
+  Int_t   expoStart;
   Int_t   nSavedPix;
   
   Float_t *hitParam;
   
-  hitTreeEntry_t(const Int_t nPar): runID(-1), ohdu(-1), nSavedPix(0){ hitParam = new Float_t[nPar]; };
+  hitTreeEntry_t(const Int_t nPar): runID(-1), ohdu(-1), expoStart(-1),nSavedPix(0){ hitParam = new Float_t[nPar]; };
   ~hitTreeEntry_t(){ delete[] hitParam; };
 };
 
 void initHitTree(TTree &hitSumm, hitTreeEntry_t &evt ){
   hitSumm.Branch("runID",    &(evt.runID),    "runID/I");
   hitSumm.Branch("ohdu",     &(evt.ohdu),     "ohdu/I");
+  hitSumm.Branch("expoStart",     &(evt.expoStart),     "expoStart/I");
   
   hitSumm.Branch("nSat", &(evt.hit.nSat), "nSat/I");
   hitSumm.Branch("flag", &(evt.hit.flag), "flag/I");
@@ -499,8 +501,16 @@ void initHitTree(TTree &hitSumm, hitTreeEntry_t &evt ){
   
 }
 
+void refreshTreeAddresses(TTree &hitSumm, hitTreeEntry_t &evt)
+{
+  hitSumm.SetBranchAddress("xPix",  &(evt.hit.xPix[0]));
+  hitSumm.SetBranchAddress("yPix",  &(evt.hit.yPix[0]));
+  hitSumm.SetBranchAddress("level", &(evt.hit.level[0]));
+  hitSumm.SetBranchAddress("ePix", &(evt.hit.adc[0]));
+}
 
-int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const long totpix, const int nX, const int nY, char* mask){
+
+int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask){
   
   gConfig &gc = gConfig::getInstance();
   const double kSeedThr   = gc.getExtSigma(ohdu) * gc.getSeedThr();
@@ -519,6 +529,7 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
   
   evt.runID = runID;
   evt.ohdu = ohdu;
+  evt.expoStart = expoStart;
   track_t &hit = evt.hit;
   
   TTree hitSummAux("hitSummAux","hitSummAux");
@@ -551,6 +562,7 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
 	hitSummAux.Fill();
 	if( hitSummAux.GetEntries(kTrackCuts) == 1 ){
           evt.nSavedPix = hit.xPix.size();
+          refreshTreeAddresses(hitSumm, evt);
 	  //writeHit(hitN, hit, kCal);
         }
       }
@@ -817,8 +829,10 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       readCardValue(infptr, "RUNID", runID);
       double ext = n;
       readCardValue(infptr, "OHDU", ext);
-      
-      searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, totpix, naxes[0], naxes[1], masks[eN]);
+      double expoStart = 0;
+      readCardValue(infptr, "EXPSTART", expoStart);
+
+      searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN]);
       
       /* clean up */
       delete[] outArray;
