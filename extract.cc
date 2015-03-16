@@ -281,7 +281,7 @@ void extractTrack(double* outArray, const int &i, const int &nX, const int &nY, 
     }
   }
   
-  hit.eCore += Ei;
+  if(Ei<kSat) hit.eCore += Ei;
   hit.fill(hitX, hitY, Ei, 0);
   
   outArray[i] = kExtractedMask-hit.id;
