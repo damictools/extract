@@ -522,6 +522,9 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
   
   const int kNVars = gNBaseTNtupleVars + gNExtraTNtupleVars*(kSkirtSize+1);
   Float_t *ntVars = new Float_t[kNVars];
+  if(mask == 0){
+  	mask = new char[nX*nY]();
+  } 
   
   outF->cd();
   
@@ -737,8 +740,12 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
   int anynul = 0;
   
   // Read mask
+  bool noMask = false;
   vector <char*> masks;
-  readMask(maskName, masks, singleHdu);
+  if(strlen(maskName) != 0) readMask(maskName, masks, singleHdu);
+  else{
+  	noMask = true;
+  } 
   
   int nhdu = 0;
   const unsigned int nFiles  = inFileList.size();
@@ -832,8 +839,8 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double expoStart = 0;
       readCardValue(infptr, "EXPSTART", expoStart);
 
-      searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN]);
-      
+      if(noMask) searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], 0);
+      else       searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN]);
       /* clean up */
       delete[] outArray;
     }
@@ -912,8 +919,8 @@ int processCommandLineArgs(const int argc, char *argv[],
   }
   
   if(!maskFileFlag){
-    cerr << red << "\nError: mask filename missing.\n" << normal;
-    return 2;
+    cerr << yellow << "\nMask filename missing. Will use empty mask\n" << normal;
+    maskFile = "";
   }
 
   for(int i=optind; i<argc; ++i){
