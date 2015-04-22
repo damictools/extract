@@ -410,7 +410,7 @@ void computeHitParameters(const track_t &hit, const int &l, const double &kCal, 
 	ySum += hit.yPix[i]*adc;
 	wSum += adc;
       }
-      adcSum += adc;
+      if(adc<kSat) adcSum += adc;
       ++nPix;
     }
   }
