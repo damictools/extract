@@ -93,6 +93,7 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  "   << exeName << " <input file> <mask file> -o <output filename> \n\n";
   cout << "\nOptions:\n";
   cout << "  -q for quiet (no screen output)\n";
+  cout << "  -b for computing and subtracting baseline from the image \n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
