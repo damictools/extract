@@ -1,31 +1,26 @@
 
 
 <sigma
-  default="18.1"
-  
-  ext1="15.0"
-  ext2="20.1"
-  ext3="19.1"
-  ext7="18.1"
+  default="28"
 />
 
 <calibration
-  default="5.3363e-4"
+  default="0.03571428571"
   
-  ext2="5.35e-4"
-  ext3="5.4e-4"
+  ext2="0.03571428571"
+  ext3="0.03571428571"
 />
 
 
 <thr
   seed="4"
   add="3.4"
-  skirtSize="3"
+  skirtSize="5"
 />
 
 <extra
   saveTracks="1"
-  saveTrackCuts="n0>3"
+  saveTrackCuts="n0>=1"
 /> 
   
 

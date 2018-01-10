@@ -12,6 +12,7 @@ extern const int   gNExtraTNtupleVars;
 inline double sq(double x){return x*x;};
 
 extern const int kMaxLine;
+extern const int kCompBL;
 
 extern const int kExtractedMask;
 extern const int kEdgeFlag;

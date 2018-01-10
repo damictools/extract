@@ -510,8 +510,33 @@ void refreshTreeAddresses(TTree &hitSumm, hitTreeEntry_t &evt)
 }
 
 
-int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask){
+double stableMean(const double *v, const int &N){
   
+  std::vector<double> temparray(v, v+N);
+  std::sort(temparray.begin(), temparray.end());
+  
+  const int nMin = N/3;
+  const int nMax = 2*N/3;
+  
+  double sum=0;
+  for(int i=nMin;i<nMax;++i){
+    sum+=temparray[i];
+  }
+  return sum/(nMax-nMin);
+}
+
+double subtractImageBaseline(double* outArray, const long totpix){
+  double mean = stableMean(outArray, totpix);
+  for (int i = 0; i < totpix; ++i)
+  {
+    outArray[i]-=mean;
+  }
+  return mean;
+}
+
+
+int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask){
+
   gConfig &gc = gConfig::getInstance();
   const double kSeedThr   = gc.getExtSigma(ohdu) * gc.getSeedThr();
   const double kAddThr    = gc.getExtSigma(ohdu) * gc.getAddThr();
@@ -558,15 +583,15 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
       addSkirt(outArray, nX, nY, hit, mask);
       
       for(int l=0;l<=kSkirtSize;++l){
-	computeHitParameters( hit, l, kCal, &(evt.hitParam[gNExtraTNtupleVars*l]) );
+        computeHitParameters( hit, l, kCal, &(evt.hitParam[gNExtraTNtupleVars*l]) );
       }
       
       if(kSaveTracks){
-	hitSummAux.Fill();
-	if( hitSummAux.GetEntries(kTrackCuts) == 1 ){
+        hitSummAux.Fill();
+        if( hitSummAux.GetEntries(kTrackCuts) == 1 ){
           evt.nSavedPix = hit.xPix.size();
           refreshTreeAddresses(hitSumm, evt);
-	  //writeHit(hitN, hit, kCal);
+          //writeHit(hitN, hit, kCal);
         }
       }
       
@@ -734,7 +759,7 @@ void writeConfigTree(TFile *outF){
   configTree.Write();
 }
 
-int computeImage(const vector<string> &inFileList,const char *maskName, const char *outFile, const vector<int> &singleHdu){
+int computeImage(const vector<string> &inFileList,const char *maskName, const char *outFile, const vector<int> &singleHdu, const int optFlag){
   int status = 0;
   double nulval = 0.;
   int anynul = 0;
@@ -802,8 +827,8 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double bzero;
       ffgky(infptr, TDOUBLE, "BZERO", &bzero, NULL, &status);
       if (status){
-	status = 0;
-	bzero = 0.0;
+        status = 0;
+        bzero = 0.0;
       }
       
       /* Don't try to process data if the hdu is empty */    
@@ -839,6 +864,15 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       double expoStart = 0;
       readCardValue(infptr, "EXPSTART", expoStart);
 
+      if(optFlag&kCompBL){
+        cout << "\n====================================\n";
+        cout << "WARNING: subtracting image baseline.\n";
+        double imBL = subtractImageBaseline(outArray, totpix);
+        cout << "  Im BL = " << imBL << endl;
+        cout << "Finished computing image baseline.\n";
+        cout << "====================================\n\n";
+      }
+
       if(noMask) searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], 0);
       else       searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN]);
       /* clean up */
@@ -867,15 +901,16 @@ void checkArch(){
 }
 
 int processCommandLineArgs(const int argc, char *argv[], 
-                           vector<int> &singleHdu, vector<string> &inFileList, string &maskFile, string &outFile, string &confFile){
+                           vector<int> &singleHdu, vector<string> &inFileList, string &maskFile, string &outFile, string &confFile, int &optFlag){
   
   if(argc == 1) return 1;
+  optFlag = 0;
   inFileList.clear();
   singleHdu.clear();
   bool outFileFlag = false;
   bool maskFileFlag = false;
   int opt=0;
-  while ( (opt = getopt(argc, argv, "i:m:o:s:c:qhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "bi:m:o:s:c:qhH?")) != -1) {
     switch (opt) {
       case 'm':
         if(!maskFileFlag){
@@ -902,6 +937,9 @@ int processCommandLineArgs(const int argc, char *argv[],
         break;
       case 'c':
         confFile = optarg;
+        break;
+      case 'b':
+        optFlag |= kCompBL;
         break;
       case 'q':
         gVerbosity = 0;
@@ -949,13 +987,14 @@ int main(int argc, char *argv[])
   double dif;
   time (&start);
   
+  int optFlag;
   string maskFile;
   string outFile;
   string confFile = "extractConfig.xml";
   vector<string> inFileList;
   vector<int> singleHdu;
 
-  int returnCode = processCommandLineArgs( argc, argv, singleHdu, inFileList, maskFile, outFile, confFile);
+  int returnCode = processCommandLineArgs( argc, argv, singleHdu, inFileList, maskFile, outFile, confFile, optFlag);
   if(returnCode!=0){
     if(returnCode == 1) printCopyHelp(argv[0],true);
     if(returnCode == 2) printCopyHelp(argv[0]);
@@ -1003,7 +1042,7 @@ int main(int argc, char *argv[])
     cout << bold << "\nThe output will be saved in the file:\n\t" << normal << outFile << endl;
   }
   
-  int status = computeImage( inFileList, maskFile.c_str(),  outFile.c_str(), singleHdu);
+  int status = computeImage( inFileList, maskFile.c_str(),  outFile.c_str(), singleHdu, optFlag);
   if (status != 0){ 
     fits_report_error(stderr, status);
     return status;
