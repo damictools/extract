@@ -1,10 +1,16 @@
 CFITSIO = $(FITSIOROOT)
 CPP = g++
 CC = gcc
-CFLAGS = -Wall -I$(CFITSIO) $(shell root-config --cflags) -O3
-LIBS = -L$(CFITSIO) -lcfitsio -lm $(shell root-config --libs)  
-GLIBS = 
-GLIBS += 
+GCCNEWERTHAN47 := $(shell expr `gcc -dumpversion` \>= 4.7)
+CFLAGS = -Wall -I$(CFITSIO) $(shell root-config --cflags)
+LIBS = -L$(CFITSIO) -lcfitsio -lm $(shell root-config --libs)
+GLIBS =
+GLIBS +=
+ifeq "$(GCCNEWERTHAN47)" "1"
+  CFLAGS += -std=c++11
+else
+  CFLAGS += -std=c++0x
+endif
 OBJECTS = extract.o tinyxml2.o gConfig.o globalConstants.o 
 HEADERS = globalConstants.h tinyxml2.h gConfig.h
 

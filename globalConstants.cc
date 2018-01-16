@@ -8,7 +8,10 @@ const char *gExtraTNtupleVars[] = {"E", "n", "xBary", "yBary", "xVar", "yVar"};
 const int   gNExtraTNtupleVars  = 6;
 
 const int kMaxLine = 10000;
-const int kCompBL  = 1;
+const int kCompBL       = 1;
+const int kCompBLWindow = 4;
+const int kCompNS       = 2;
+
 
 const int kExtractedMask = -100000;
 const int kEdgeFlag = 2;

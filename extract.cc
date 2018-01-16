@@ -93,7 +93,9 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  "   << exeName << " <input file> <mask file> -o <output filename> \n\n";
   cout << "\nOptions:\n";
   cout << "  -q for quiet (no screen output)\n";
-  cout << "  -b for computing and subtracting baseline from the image \n";
+  cout << "  -b for computing and subtracting flat baseline from the image \n";
+  cout << "  -w for computing and subtracting running window baseline from the image \n";
+  cout << "  -n for computing noise sigma from the image \n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
   cout << blue;
@@ -510,41 +512,87 @@ void refreshTreeAddresses(TTree &hitSumm, hitTreeEntry_t &evt)
   hitSumm.SetBranchAddress("ePix", &(evt.hit.adc[0]));
 }
 
-
-double stableMean(const double *v, const int &N){
-  
-  std::vector<double> temparray(v, v+N);
-  std::sort(temparray.begin(), temparray.end());
-  
-  const int nMin = N/3;
-  const int nMax = 2*N/3;
-  
-  double sum=0;
-  for(int i=nMin;i<nMax;++i){
-    sum+=temparray[i];
-  }
-  return sum/(nMax-nMin);
+double computeMedian( double* v, const size_t &N){
+  std::vector<double> vTmpCpy(v, v+N);
+  size_t centerElmt = N / 2;
+  nth_element(vTmpCpy.begin(), vTmpCpy.begin()+centerElmt, vTmpCpy.end());
+  auto median = vTmpCpy[centerElmt];
+  return median;  
 }
 
-double subtractImageBaseline(double* outArray, const long totpix){
-  double mean = stableMean(outArray, totpix);
-  for (int i = 0; i < totpix; ++i)
-  {
-    outArray[i]-=mean;
-  }
-  return mean;
+double computeMAD( double* v, const size_t &N, const double &median){
+  std::vector<double> vTmpMad(v, v+N);
+  std::transform(v, v+N, vTmpMad.begin(), [median](double vElmt){return abs(vElmt-median);});
+  size_t centerElmt = N / 2;
+  nth_element(vTmpMad.begin(), vTmpMad.begin()+centerElmt, vTmpMad.end());
+  auto mad = vTmpMad[centerElmt];
+  return mad;
+}
+
+void computeMedianAndMAD( double* v, const size_t &N, double &median, double &mad){
+  std::vector<double> vTmpCpy(v, v+N);
+  size_t centerElmt = N / 2;
+  nth_element(vTmpCpy.begin(), vTmpCpy.begin()+centerElmt, vTmpCpy.end());
+  median = vTmpCpy[centerElmt];
+
+  std::transform(vTmpCpy.begin(), vTmpCpy.end(), vTmpCpy.begin(), [median](double vElmt){return abs(vElmt-median);});
+  nth_element(vTmpCpy.begin(), vTmpCpy.begin()+centerElmt, vTmpCpy.end());
+  mad = vTmpCpy[centerElmt];
+}
+
+void subtractImageBaseline(double *outArray, const size_t &totpix, const size_t &nCol, const int &mode=1, const int nWindow=11){
+  
+	if(mode == 0){ // use the median of the whole image (useful to see base-line structure)
+		if(gVerbosity) showProgress(0,1);
+	  auto median = computeMedian(outArray, totpix);
+		if(gVerbosity) showProgress(1,2);
+	  std::transform(outArray, outArray+totpix, outArray, [median](double vElmt){return vElmt-median;});
+		if(gVerbosity) showProgress(1,1); 
+	  return;
+	}
+
+	if(mode == 1){ // use a sliding window on each line to subtract the base-line
+		// if(gVerbosity) showProgress(0,1);
+	  const auto nRows   = totpix/nCol;
+	  std::vector<double> vAuxRow(nCol);
+	  for(size_t r=0; r<nRows; ++r){
+	    for (size_t c = 0; c < nCol; ++c){
+	      auto wStart = max(size_t(0), c-nWindow);
+	      if(wStart>nCol-nWindow) wStart=nCol-nWindow;
+	      auto windowMedian = computeMedian(outArray+nCol*r+wStart, nWindow);
+	      vAuxRow[c] = outArray[nCol*r+c] - windowMedian;
+	    }
+	    for (size_t c = 0; c < nCol; ++c) outArray[nCol*r+c] = vAuxRow[c];
+			if(gVerbosity) showProgress(r,nRows);
+	  }
+		if(gVerbosity) showProgress(1,1);
+		return;
+	}
+}
+
+double computeNoiseSigma(double *outArray, const size_t &totpix){
+	if(gVerbosity){
+		cout << "\nWARNING: computing sigma noise from the image\n";
+		cout << "         Sigma from the config file will be ignored.\n";
+	}
+	auto median = computeMedian(outArray, totpix);
+	auto mad    = computeMAD(outArray, totpix, median);
+	auto sdFromMAD = mad*1.4826;
+	return sdFromMAD;
 }
 
 
-int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask){
+
+int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask, const int optFlag){
 
   gConfig &gc = gConfig::getInstance();
-  const double kSeedThr   = gc.getExtSigma(ohdu) * gc.getSeedThr();
-  const double kAddThr    = gc.getExtSigma(ohdu) * gc.getAddThr();
-  const double kCal       = gc.getExtCal(ohdu);
-  const int    kSkirtSize = gc.getSkirtSize();
-  const bool  kSaveTracks = gc.getSaveTracks();
-  const char *kTrackCuts  = gc.getTracksCuts().c_str();
+  const double kNoiseSigma = (optFlag&kCompNS)? computeNoiseSigma(outArray, totpix) : gc.getExtSigma(ohdu);
+  const double kSeedThr    = kNoiseSigma * gc.getSeedThr();
+  const double kAddThr     = kNoiseSigma * gc.getAddThr();
+  const double kCal        = gc.getExtCal(ohdu);
+  const int    kSkirtSize  = gc.getSkirtSize();
+  const bool  kSaveTracks  = gc.getSaveTracks();
+  const char *kTrackCuts   = gc.getTracksCuts().c_str();
   
   const int kNVars = gNBaseTNtupleVars + gNExtraTNtupleVars*(kSkirtSize+1);
   Float_t *ntVars = new Float_t[kNVars];
@@ -569,7 +617,7 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
   
   
   if(gVerbosity){
-    cout << "\nProcessing runID " << runID << " ohdu " << ohdu << " -> sigma: " << gc.getExtSigma(ohdu) << ":\n";
+    cout << "\nProcessing runID " << runID << " ohdu " << ohdu << " -> sigma: " << kNoiseSigma << ":\n";
   }
   for(long i=0;i<totpix;++i){
     
@@ -835,7 +883,7 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       /* Don't try to process data if the hdu is empty */    
 //       cout << (hdutype != IMAGE_HDU) << (naxis == 0) << (totpix == 0) << endl;
       if (hdutype != IMAGE_HDU || naxis == 0 || totpix == 0){
-	continue;
+				continue;
       }
       
       double* outArray = new double[totpix];
@@ -866,16 +914,16 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
       readCardValue(infptr, "EXPSTART", expoStart);
 
       if(optFlag&kCompBL){
-        cout << "\n====================================\n";
-        cout << "WARNING: subtracting image baseline.\n";
-        double imBL = subtractImageBaseline(outArray, totpix);
-        cout << "  Im BL = " << imBL << endl;
-        cout << "Finished computing image baseline.\n";
-        cout << "====================================\n\n";
+        cout << "\nWARNING: subtracting image baseline.\n";
+        cout << "MODE = " << ((optFlag&kCompBLWindow)? "SLIDING-WINDOW\n" : "FLAT\n");
+        const int nWindow = 11;
+        if(optFlag&kCompBLWindow) subtractImageBaseline(outArray, totpix, xMax, 1, nWindow);
+        else                      subtractImageBaseline(outArray, totpix, xMax, 0);
+        cout << "\nFinished computing image baseline.\n";
       }
 
-      if(noMask) searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], 0);
-      else       searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN]);
+      if(noMask) searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], 0, optFlag);
+      else       searchForTracks(&outRootFile, hitSumm, evt, outArray, (int)runID, (int)ext, (int)expoStart, totpix, naxes[0], naxes[1], masks[eN], optFlag);
       /* clean up */
       delete[] outArray;
     }
@@ -911,7 +959,7 @@ int processCommandLineArgs(const int argc, char *argv[],
   bool outFileFlag = false;
   bool maskFileFlag = false;
   int opt=0;
-  while ( (opt = getopt(argc, argv, "bi:m:o:s:c:qhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "wnbi:m:o:s:c:qhH?")) != -1) {
     switch (opt) {
       case 'm':
         if(!maskFileFlag){
@@ -941,6 +989,13 @@ int processCommandLineArgs(const int argc, char *argv[],
         break;
       case 'b':
         optFlag |= kCompBL;
+        break;
+      case 'w':
+        optFlag |= kCompBL;
+        optFlag |= kCompBLWindow;
+        break;
+      case 'n':
+        optFlag |= kCompNS;
         break;
       case 'q':
         gVerbosity = 0;
