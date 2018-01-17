@@ -1,20 +1,17 @@
 
 
 <sigma
-  default="28"
+  default="17"
 />
 
 <calibration
-  default="0.03571428571"
-  
-  ext2="0.03571428571"
-  ext3="0.03571428571"
+  default="1"
 />
 
 
 <thr
   seed="4"
-  add="3.4"
+  add="3"
   skirtSize="5"
 />
 

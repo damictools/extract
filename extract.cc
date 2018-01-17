@@ -522,7 +522,8 @@ double computeMedian( double* v, const size_t &N){
 
 double computeMAD( double* v, const size_t &N, const double &median){
   std::vector<double> vTmpMad(v, v+N);
-  std::transform(v, v+N, vTmpMad.begin(), [median](double vElmt){return abs(vElmt-median);});
+  //std::transform(v, v+N, vTmpMad.begin(), [median](double vElmt){return abs(vElmt-median);}); // doesn't work on gcc 4.4
+  for(size_t i; i<N; ++i) vTmpMad[i] = abs(v[i]-median);
   size_t centerElmt = N / 2;
   nth_element(vTmpMad.begin(), vTmpMad.begin()+centerElmt, vTmpMad.end());
   auto mad = vTmpMad[centerElmt];
@@ -535,7 +536,8 @@ void computeMedianAndMAD( double* v, const size_t &N, double &median, double &ma
   nth_element(vTmpCpy.begin(), vTmpCpy.begin()+centerElmt, vTmpCpy.end());
   median = vTmpCpy[centerElmt];
 
-  std::transform(vTmpCpy.begin(), vTmpCpy.end(), vTmpCpy.begin(), [median](double vElmt){return abs(vElmt-median);});
+  //std::transform(vTmpCpy.begin(), vTmpCpy.end(), vTmpCpy.begin(), [median](double vElmt){return abs(vElmt-median);}); // doesn't work on gcc 4.4
+  for(size_t i; i<N; ++i) vTmpCpy[i] = abs(vTmpCpy[i]-median);
   nth_element(vTmpCpy.begin(), vTmpCpy.begin()+centerElmt, vTmpCpy.end());
   mad = vTmpCpy[centerElmt];
 }
@@ -546,7 +548,8 @@ void subtractImageBaseline(double *outArray, const size_t &totpix, const size_t 
 		if(gVerbosity) showProgress(0,1);
 	  auto median = computeMedian(outArray, totpix);
 		if(gVerbosity) showProgress(1,2);
-	  std::transform(outArray, outArray+totpix, outArray, [median](double vElmt){return vElmt-median;});
+	  //std::transform(outArray, outArray+totpix, outArray, [median](double vElmt){return vElmt-median;}); // doesn't work on gcc 4.4
+	  for(size_t i; i<totpix; ++i) outArray[i] = outArray[i]-median;
 		if(gVerbosity) showProgress(1,1); 
 	  return;
 	}
