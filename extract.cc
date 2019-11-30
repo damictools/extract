@@ -589,13 +589,13 @@ double computeNoiseSigma(double *outArray, const size_t &totpix){
 int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* outArray, const int runID, const int ohdu, const int expoStart, const long totpix, const int nX, const int nY, char* mask, const int optFlag){
 
   gConfig &gc = gConfig::getInstance();
-  const double kNoiseSigma = (optFlag&kCompNS)? computeNoiseSigma(outArray, totpix) : gc.getExtSigma(ohdu);
-  const double kSeedThr    = kNoiseSigma * gc.getSeedThr();
-  const double kAddThr     = kNoiseSigma * gc.getAddThr();
-  const double kCal        = gc.getExtCal(ohdu);
-  const int    kSkirtSize  = gc.getSkirtSize();
-  const bool  kSaveTracks  = gc.getSaveTracks();
-  const char *kTrackCuts   = gc.getTracksCuts().c_str();
+  const double  kNoiseSigma = (optFlag&kCompNS)? computeNoiseSigma(outArray, totpix) : gc.getExtSigma(ohdu);
+  const double  kSeedThr    = kNoiseSigma * gc.getSeedThr();
+  const double  kAddThr     = kNoiseSigma * gc.getAddThr();
+  const double  kCal        = gc.getExtCal(ohdu);
+  const int     kSkirtSize  = gc.getSkirtSize();
+  const bool    kSaveTracks = gc.getSaveTracks();
+  const TString kTrackCuts  = gc.getTracksCuts();
   
   const int kNVars = gNBaseTNtupleVars + gNExtraTNtupleVars*(kSkirtSize+1);
   Float_t *ntVars = new Float_t[kNVars];
@@ -623,7 +623,6 @@ int searchForTracks(TFile *outF, TTree &hitSumm, hitTreeEntry_t &evt, double* ou
     cout << "\nProcessing runID " << runID << " ohdu " << ohdu << " -> sigma: " << kNoiseSigma << ":\n";
   }
   for(long i=0;i<totpix;++i){
-    
     if(outArray[i]>kSeedThr){
       
       evt.nSavedPix = 0;
