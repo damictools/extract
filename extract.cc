@@ -95,6 +95,7 @@ void printCopyHelp(const char *exeName, bool printFullHelp=false){
   cout << "  -q for quiet (no screen output)\n";
   cout << "  -b for computing and subtracting flat baseline from the image \n";
   cout << "  -w for computing and subtracting running window baseline from the image \n";
+  cout << "  -l for computing and subtracting baseline from the median of each row in the image \n";
   cout << "  -n for computing noise sigma from the image \n";
   cout << "  -s <HDU number> for processing a single HDU \n\n";
   cout << normal;
@@ -571,6 +572,19 @@ void subtractImageBaseline(double *outArray, const size_t &totpix, const size_t 
 		if(gVerbosity) showProgress(1,1);
 		return;
 	}
+
+  if(mode == 2){ // use the median from each line to subtract the base-line
+    const auto nRows   = totpix/nCol;
+    for(size_t r=0; r<nRows; ++r){
+      auto rowMedian = computeMedian(outArray+nCol*r, nCol);
+      for (size_t c = 0; c < nCol; ++c){
+        outArray[nCol*r+c] -= rowMedian;
+      }
+      if(gVerbosity) showProgress(r,nRows);
+    }
+    if(gVerbosity) showProgress(1,1);
+    return;
+  }  
 }
 
 double computeNoiseSigma(double *outArray, const size_t &totpix){
@@ -917,10 +931,19 @@ int computeImage(const vector<string> &inFileList,const char *maskName, const ch
 
       if(optFlag&kCompBL){
         cout << "\nWARNING: subtracting image baseline.\n";
-        cout << "MODE = " << ((optFlag&kCompBLWindow)? "SLIDING-WINDOW\n" : "FLAT\n");
-        const int nWindow = 11;
-        if(optFlag&kCompBLWindow) subtractImageBaseline(outArray, totpix, xMax, 1, nWindow);
-        else                      subtractImageBaseline(outArray, totpix, xMax, 0);
+        if     (optFlag&kCompBLWindow) {
+          const int nWindow = 11;
+          cout << "MODE: SLIDING-WINDOW = " << nWindow << endl;
+          subtractImageBaseline(outArray, totpix, xMax, 1, nWindow);
+        }
+        else if(optFlag&kCompRowMedia){
+          cout << "MODE: ROW-MEDIAN\n";
+          subtractImageBaseline(outArray, totpix, xMax, 2);
+        } 
+        else{
+          cout << "MODE: FLAT\n";
+          subtractImageBaseline(outArray, totpix, xMax, 0);
+        } 
         cout << "\nFinished computing image baseline.\n";
       }
 
@@ -961,7 +984,7 @@ int processCommandLineArgs(const int argc, char *argv[],
   bool outFileFlag = false;
   bool maskFileFlag = false;
   int opt=0;
-  while ( (opt = getopt(argc, argv, "wnbi:m:o:s:c:qhH?")) != -1) {
+  while ( (opt = getopt(argc, argv, "lwnbi:m:o:s:c:qhH?")) != -1) {
     switch (opt) {
       case 'm':
         if(!maskFileFlag){
@@ -995,6 +1018,10 @@ int processCommandLineArgs(const int argc, char *argv[],
       case 'w':
         optFlag |= kCompBL;
         optFlag |= kCompBLWindow;
+        break;
+      case 'l':
+        optFlag |= kCompBL;
+        optFlag |= kCompRowMedia;
         break;
       case 'n':
         optFlag |= kCompNS;

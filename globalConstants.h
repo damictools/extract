@@ -14,6 +14,7 @@ inline double sq(double x){return x*x;};
 extern const int kMaxLine;
 extern const int kCompBL;
 extern const int kCompBLWindow;
+extern const int kCompRowMedia;
 extern const int kCompNS;
 
 extern const int kExtractedMask;
